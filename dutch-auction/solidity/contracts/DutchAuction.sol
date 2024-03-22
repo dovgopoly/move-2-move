@@ -6,6 +6,8 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
 contract DutchAuction is Ownable, ERC721 {
+    event AuctionCreated(uint256 nftId);
+
     struct Auction {
         IERC20 buyToken;
         uint256 maxPrice;
@@ -46,6 +48,12 @@ contract DutchAuction is Ownable, ERC721 {
         _mint(address(this), nftId_);
 
         _auctions[nftId_] = Auction(buyToken_, maxPrice_, minPrice_, duration_, block.timestamp);
+
+        emit AuctionCreated(nftId_);
+    }
+
+    function getAuction(uint256 nftId_) external view returns (Auction memory auction_) {
+        return _auctions[nftId_];
     }
 
     function _baseURI() internal pure override returns (string memory) {

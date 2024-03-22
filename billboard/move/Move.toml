@@ -4,7 +4,7 @@ version = "1.0.0"
 authors = []
 
 [addresses]
-billboard_address = "_"
+billboard_address = "0x1337"
 
 [dev-addresses]
 

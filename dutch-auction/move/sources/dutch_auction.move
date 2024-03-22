@@ -10,19 +10,13 @@ module dutch_auction_address::dutch_auction {
     use aptos_framework::timestamp;
     use aptos_token_objects::collection;
     use aptos_token_objects::token::{Self, Token};
-    #[test_only]
-    use std::features;
-    #[test_only]
-    use std::vector;
-    #[test_only]
-    use aptos_std::debug;
-    #[test_only]
-    use aptos_framework::fungible_asset;
 
     const ENOT_OWNER: u64 = 1;
     const ENOT_ON_SALE: u64 = 2;
     const EINVALID_AUCTION_OBJECT: u64 = 3;
     const EOUTDATED_AUCTION: u64 = 4;
+    const EINVALID_PRICES: u64 = 5;
+    const EINVALID_DURATION: u64 = 6;
 
     const DUTCH_AUCTION_COLLECTION_NAME: vector<u8> = b"DUTCH_AUCTION_NAME";
     const DUTCH_AUCTION_COLLECTION_DESCRIPTION: vector<u8> = b"DUTCH_AUCTION_DESCRIPTION";
@@ -44,7 +38,7 @@ module dutch_auction_address::dutch_auction {
     }
 
     #[event]
-    struct AuctionCreatedEvent has drop, store {
+    struct AuctionCreated has drop, store {
         auction: Object<Auction>
     }
 
@@ -95,6 +89,9 @@ module dutch_auction_address::dutch_auction {
     ) {
         only_owner(owner);
 
+        assert!(max_price >= min_price, error::invalid_argument(EINVALID_PRICES));
+        assert!(max_price >= min_price, error::invalid_argument(EINVALID_DURATION));
+
         let sell_token_ctor = token::create_named_token(
             owner,
             string::utf8(DUTCH_AUCTION_COLLECTION_NAME),
@@ -123,7 +120,7 @@ module dutch_auction_address::dutch_auction {
 
         let auction = object::object_from_constructor_ref<Auction>(&auction_ctor);
 
-        event::emit(AuctionCreatedEvent { auction });
+        event::emit(AuctionCreated { auction });
     }
 
     fun must_have_price(auction: &Auction): u64 {
@@ -142,7 +139,14 @@ module dutch_auction_address::dutch_auction {
     }
 
     #[test(aptos_framework = @std, owner = @dutch_auction_address, customer = @0x1337)]
-    fun test_auction_happy_path(aptos_framework: &signer, owner: &signer, customer: &signer) acquires Auction, TokenConfig {
+    fun test_auction_happy_path(
+        aptos_framework: &signer,
+        owner: &signer,
+        customer: &signer
+    ) acquires Auction, TokenConfig {
+        use std::features;
+        use std::vector;
+
         init_module(owner);
 
         let feature = features::get_aggregator_v2_api_feature();
@@ -164,18 +168,22 @@ module dutch_auction_address::dutch_auction {
             300
         );
 
-        let auction_created_events = event::emitted_events<AuctionCreatedEvent>();
+        let auction_created_events = event::emitted_events<AuctionCreated>();
         let auction = vector::borrow(&auction_created_events, 0).auction;
 
-        debug::print(&primary_fungible_store::balance(signer::address_of(customer), buy_token));
+        assert!(primary_fungible_store::balance(signer::address_of(customer), buy_token) == 50, 1);
 
         bid(customer, auction);
 
-        debug::print(&primary_fungible_store::balance(signer::address_of(customer), buy_token));
+        primary_fungible_store::transfer(customer, buy_token, @dutch_auction_address, 20);
+
+        assert!(primary_fungible_store::balance(signer::address_of(customer), buy_token) == 40, 1);
     }
 
     #[test_only]
     fun setup_buy_token(owner: &signer, customer: &signer): Object<Metadata> {
+        use aptos_framework::fungible_asset;
+
         let ctor_ref = object::create_sticky_object(signer::address_of(owner));
 
         primary_fungible_store::create_primary_store_enabled_fungible_asset(
@@ -190,12 +198,14 @@ module dutch_auction_address::dutch_auction {
 
         let metadata = object::object_from_constructor_ref<Metadata>(&ctor_ref);
         let mint_ref = fungible_asset::generate_mint_ref(&ctor_ref);
-        let customer = primary_fungible_store::ensure_primary_store_exists(
+        let customer_store = primary_fungible_store::ensure_primary_store_exists(
             signer::address_of(customer),
             metadata
         );
 
-        fungible_asset::mint_to(&mint_ref, customer, 50);
+        primary_fungible_store::transfer(customer, metadata, @dutch_auction_address, 20);
+
+        fungible_asset::mint_to(&mint_ref, customer_store, 50);
 
         metadata
     }
