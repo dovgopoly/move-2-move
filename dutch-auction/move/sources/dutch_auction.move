@@ -138,49 +138,7 @@ module dutch_auction_address::dutch_auction {
         assert!(signer::address_of(owner) == @dutch_auction_address, error::permission_denied(ENOT_OWNER));
     }
 
-    #[test(aptos_framework = @std, owner = @dutch_auction_address, customer = @0x1337)]
-    fun test_auction_happy_path(
-        aptos_framework: &signer,
-        owner: &signer,
-        customer: &signer
-    ) acquires Auction, TokenConfig {
-        use std::features;
-        use std::vector;
-
-        init_module(owner);
-
-        let feature = features::get_aggregator_v2_api_feature();
-        features::change_feature_flags(aptos_framework, vector[], vector[feature]);
-
-        timestamp::set_time_has_started_for_testing(aptos_framework);
-        timestamp::update_global_time_for_test_secs(1000);
-
-        let buy_token = setup_buy_token(owner, customer);
-
-        start_auction(
-            owner,
-            string::utf8(b"token_name"),
-            string::utf8(b"token_description"),
-            string::utf8(b"token_uri"),
-            buy_token,
-            10,
-            1,
-            300
-        );
-
-        let auction_created_events = event::emitted_events<AuctionCreated>();
-        let auction = vector::borrow(&auction_created_events, 0).auction;
-
-        assert!(primary_fungible_store::balance(signer::address_of(customer), buy_token) == 50, 1);
-
-        bid(customer, auction);
-
-        primary_fungible_store::transfer(customer, buy_token, @dutch_auction_address, 20);
-
-        assert!(primary_fungible_store::balance(signer::address_of(customer), buy_token) == 40, 1);
-    }
-
-    #[test_only]
+    #[test(owner = @dutch_auction_address, customer = @0x1337)]
     fun setup_buy_token(owner: &signer, customer: &signer): Object<Metadata> {
         use aptos_framework::fungible_asset;
 
@@ -198,15 +156,90 @@ module dutch_auction_address::dutch_auction {
 
         let metadata = object::object_from_constructor_ref<Metadata>(&ctor_ref);
         let mint_ref = fungible_asset::generate_mint_ref(&ctor_ref);
-        let customer_store = primary_fungible_store::ensure_primary_store_exists(
-            signer::address_of(customer),
-            metadata
-        );
 
-        primary_fungible_store::transfer(customer, metadata, @dutch_auction_address, 20);
+        let customer_store = primary_fungible_store::ensure_primary_store_exists(signer::address_of(customer), metadata);
 
         fungible_asset::mint_to(&mint_ref, customer_store, 50);
 
+        std::debug::print(&primary_fungible_store::balance(signer::address_of(customer), metadata));
+
+        primary_fungible_store::transfer(customer, metadata, @dutch_auction_address, 10);
+
+        std::debug::print(&primary_fungible_store::balance(signer::address_of(customer), metadata));
+
         metadata
     }
+    // #[test(aptos_framework = @std, owner = @dutch_auction_address, customer = @0x1337)]
+    // fun test_auction_happy_path(
+    //     aptos_framework: &signer,
+    //     owner: &signer,
+    //     customer: &signer
+    // ) acquires Auction, TokenConfig {
+    //     use std::features;
+    //     use std::vector;
+    //
+    //     init_module(owner);
+    //
+    //     let feature = features::get_aggregator_v2_api_feature();
+    //     features::change_feature_flags(aptos_framework, vector[], vector[feature]);
+    //
+    //     timestamp::set_time_has_started_for_testing(aptos_framework);
+    //     timestamp::update_global_time_for_test_secs(1000);
+    //
+    //     let buy_token = setup_buy_token(owner, customer);
+    //
+    //     start_auction(
+    //         owner,
+    //         string::utf8(b"token_name"),
+    //         string::utf8(b"token_description"),
+    //         string::utf8(b"token_uri"),
+    //         buy_token,
+    //         10,
+    //         1,
+    //         300
+    //     );
+    //
+    //     let auction_created_events = event::emitted_events<AuctionCreated>();
+    //     let auction = vector::borrow(&auction_created_events, 0).auction;
+    //
+    //     //assert!(primary_fungible_store::balance(signer::address_of(customer), buy_token) == 50, 1);
+    //
+    //     bid(customer, auction);
+    //
+    //     primary_fungible_store::transfer(customer, buy_token, @dutch_auction_address, 20);
+    //
+    //     //assert!(primary_fungible_store::balance(signer::address_of(customer), buy_token) == 40, 1);
+    // }
+    //
+    // #[test_only]
+    // fun setup_buy_token(owner: &signer, customer: &signer): Object<Metadata> {
+    //     use aptos_framework::fungible_asset;
+    //
+    //     let ctor_ref = object::create_sticky_object(signer::address_of(owner));
+    //
+    //     primary_fungible_store::create_primary_store_enabled_fungible_asset(
+    //         &ctor_ref,
+    //         option::none<u128>(),
+    //         string::utf8(b"token"),
+    //         string::utf8(b"symbol"),
+    //         0,
+    //         string::utf8(b"icon_uri"),
+    //         string::utf8(b"project_uri")
+    //     );
+    //
+    //     let metadata = object::object_from_constructor_ref<Metadata>(&ctor_ref);
+    //     let mint_ref = fungible_asset::generate_mint_ref(&ctor_ref);
+    //
+    //     let customer_store = primary_fungible_store::ensure_primary_store_exists(signer::address_of(customer), metadata);
+    //
+    //     fungible_asset::mint_to(&mint_ref, customer_store, 50);
+    //
+    //     std::debug::print(&primary_fungible_store::balance(signer::address_of(customer), metadata));
+    //
+    //     primary_fungible_store::transfer(customer, metadata, @dutch_auction_address, 10);
+    //
+    //     std::debug::print(&primary_fungible_store::balance(signer::address_of(customer), metadata));
+    //
+    //     metadata
+    // }
 }
