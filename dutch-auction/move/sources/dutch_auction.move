@@ -90,7 +90,7 @@ module dutch_auction_address::dutch_auction {
         only_owner(owner);
 
         assert!(max_price >= min_price, error::invalid_argument(EINVALID_PRICES));
-        assert!(max_price >= min_price, error::invalid_argument(EINVALID_DURATION));
+        assert!(duration > 0, error::invalid_argument(EINVALID_DURATION));
 
         let sell_token_ctor = token::create_named_token(
             owner,
