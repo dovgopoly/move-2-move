@@ -1,5 +1,5 @@
 {
-  "name": "billboard",
+  "name": "dutch-auction",
   "version": "1.0.0",
   "scripts": {
     "compile": "npx hardhat compile"
