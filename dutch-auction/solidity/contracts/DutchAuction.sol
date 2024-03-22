@@ -64,7 +64,7 @@ contract DutchAuction is Ownable, ERC721 {
         require(block.timestamp <= auction_.startedAt + auction_.duration, "DutchAuction: outdated");
 
         uint256 timePassed_ = block.timestamp - auction_.startedAt;
-        uint256 discount_ = ((auction_.maxPrice - auction_.maxPrice) * timePassed_) / auction_.duration;
+        uint256 discount_ = ((auction_.maxPrice - auction_.minPrice) * timePassed_) / auction_.duration;
 
         return auction_.maxPrice - discount_;
     }
