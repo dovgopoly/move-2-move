@@ -3,12 +3,14 @@ module dutch_auction_address::dutch_auction {
     use std::string::{Self, String};
     use std::option;
     use std::signer;
+    use std::vector;
     use aptos_framework::event;
     use aptos_framework::object::{Self, Object, TransferRef};
     use aptos_framework::fungible_asset::{Metadata};
     use aptos_framework::primary_fungible_store;
     use aptos_framework::timestamp;
     use aptos_token_objects::collection;
+    use aptos_token_objects::collection::Collection;
     use aptos_token_objects::token::{Self, Token};
 
     const ENOT_OWNER: u64 = 1;
@@ -21,6 +23,8 @@ module dutch_auction_address::dutch_auction {
     const DUTCH_AUCTION_COLLECTION_NAME: vector<u8> = b"DUTCH_AUCTION_NAME";
     const DUTCH_AUCTION_COLLECTION_DESCRIPTION: vector<u8> = b"DUTCH_AUCTION_DESCRIPTION";
     const DUTCH_AUCTION_COLLECTION_URI: vector<u8> = b"DUTCH_AUCTION_URI";
+
+    const DUTCH_AUCTION_SEED_PREFIX: vector<u8> = b"AUCTION_SEED_PREFIX";
 
     #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
     struct Auction has key {
@@ -43,12 +47,16 @@ module dutch_auction_address::dutch_auction {
     }
 
     fun init_module(creator: &signer) {
+        let description = string::utf8(DUTCH_AUCTION_COLLECTION_DESCRIPTION);
+        let name = string::utf8(DUTCH_AUCTION_COLLECTION_NAME);
+        let uri = string::utf8(DUTCH_AUCTION_COLLECTION_URI);
+
         collection::create_unlimited_collection(
             creator,
-            string::utf8(DUTCH_AUCTION_COLLECTION_DESCRIPTION),
-            string::utf8(DUTCH_AUCTION_COLLECTION_NAME),
+            description,
+            name,
             option::none(),
-            string::utf8(DUTCH_AUCTION_COLLECTION_URI),
+            uri,
         );
     }
 
@@ -92,9 +100,11 @@ module dutch_auction_address::dutch_auction {
         assert!(max_price >= min_price, error::invalid_argument(EINVALID_PRICES));
         assert!(duration > 0, error::invalid_argument(EINVALID_DURATION));
 
+        let collection_name = string::utf8(DUTCH_AUCTION_COLLECTION_NAME);
+
         let sell_token_ctor = token::create_named_token(
             owner,
-            string::utf8(DUTCH_AUCTION_COLLECTION_NAME),
+            collection_name,
             token_description,
             token_name,
             option::none(),
@@ -112,7 +122,7 @@ module dutch_auction_address::dutch_auction {
             started_at: timestamp::now_seconds()
         };
 
-        let auction_ctor = object::create_object(signer::address_of(owner));
+        let auction_ctor = object::create_named_object(owner, get_auction_seed(token_name));
         let auction_signer = object::generate_signer(&auction_ctor);
 
         move_to(&auction_signer, auction);
@@ -121,6 +131,47 @@ module dutch_auction_address::dutch_auction {
         let auction = object::object_from_constructor_ref<Auction>(&auction_ctor);
 
         event::emit(AuctionCreated { auction });
+    }
+
+    #[view]
+    fun get_token_seed(token_name: String): vector<u8> {
+        let collection_name = string::utf8(DUTCH_AUCTION_COLLECTION_NAME);
+
+        token::create_token_seed(&collection_name, &token_name)
+    }
+
+    #[view]
+    fun get_auction_seed(token_name: String): vector<u8> {
+        let token_seed = get_token_seed(token_name);
+
+        let seed = DUTCH_AUCTION_SEED_PREFIX;
+        vector::append(&mut seed, b"::");
+        vector::append(&mut seed, token_seed);
+
+        seed
+    }
+
+    #[view]
+    fun get_auction_object(token_name: String): Object<Auction> {
+        let auction_seed = get_auction_seed(token_name);
+        let auction_address = object::create_object_address(&@dutch_auction_address, auction_seed);
+
+        object::address_to_object(auction_address)
+    }
+
+    #[view]
+    fun get_collection_object(): Object<Collection> {
+        let collection_address = object::create_object_address(&@dutch_auction_address, DUTCH_AUCTION_SEED_PREFIX);
+
+        object::address_to_object(collection_address)
+    }
+
+    #[view]
+    fun get_token_object(token_name: String): Object<Token> {
+        let token_seed = get_token_seed(token_name);
+        let token_object = object::create_object_address(&@dutch_auction_address, token_seed);
+
+        object::address_to_object<Token>(token_object)
     }
 
     fun must_have_price(auction: &Auction): u64 {
@@ -145,7 +196,6 @@ module dutch_auction_address::dutch_auction {
         customer: &signer
     ) acquires Auction, TokenConfig {
         use std::features;
-        use std::vector;
 
         init_module(owner);
 
@@ -157,24 +207,37 @@ module dutch_auction_address::dutch_auction {
 
         let buy_token = setup_buy_token(owner, customer);
 
+        let token_name = string::utf8(b"token_name");
+        let token_description = string::utf8(b"token_description");
+        let token_uri = string::utf8(b"token_uri");
+        let max_price = 10;
+        let min_price = 1;
+        let duration = 300;
+
         start_auction(
             owner,
-            string::utf8(b"token_name"),
-            string::utf8(b"token_description"),
-            string::utf8(b"token_uri"),
+            token_name,
+            token_description,
+            token_uri,
             buy_token,
-            10,
-            1,
-            300
+            max_price,
+            min_price,
+            duration
         );
+
+        let token = get_token_object(token_name);
+
+        assert!(object::is_owner(token, @dutch_auction_address), 1);
 
         let auction_created_events = event::emitted_events<AuctionCreated>();
         let auction = vector::borrow(&auction_created_events, 0).auction;
 
+        assert!(auction == get_auction_object(token_name), 1);
         assert!(primary_fungible_store::balance(signer::address_of(customer), buy_token) == 50, 1);
 
         bid(customer, auction);
 
+        assert!(object::is_owner(token, signer::address_of(customer)), 1);
         assert!(primary_fungible_store::balance(signer::address_of(customer), buy_token) == 40, 1);
     }
 
@@ -197,7 +260,10 @@ module dutch_auction_address::dutch_auction {
         let metadata = object::object_from_constructor_ref<Metadata>(&ctor_ref);
         let mint_ref = fungible_asset::generate_mint_ref(&ctor_ref);
 
-        let customer_store = primary_fungible_store::ensure_primary_store_exists(signer::address_of(customer), metadata);
+        let customer_store = primary_fungible_store::ensure_primary_store_exists(
+            signer::address_of(customer),
+            metadata
+        );
 
         fungible_asset::mint_to(&mint_ref, customer_store, 50);
 
