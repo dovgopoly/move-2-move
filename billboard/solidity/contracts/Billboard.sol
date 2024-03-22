@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract Billboard is Ownable {
-    uint256 public constant MAX_MESSAGES = 10;
+    uint256 public constant MAX_MESSAGES = 5;
 
     struct BillboardStorage {
         Message[] messages;
