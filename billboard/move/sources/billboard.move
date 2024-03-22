@@ -18,10 +18,7 @@ module billboard_address::billboard {
     }
 
     fun init_module(owner: &signer) {
-        move_to(owner, Billboard {
-            messages: vector::empty<Message>(),
-            oldest_index: 0
-        })
+        move_to(owner, Billboard { messages: vector[], oldest_index: 0 })
     }
 
     public entry fun add_message(sender: &signer, message: String) acquires Billboard {
@@ -46,7 +43,7 @@ module billboard_address::billboard {
 
         let billboard = borrow_global_mut<Billboard>(@billboard_address);
 
-        billboard.messages = vector::empty<Message>();
+        billboard.messages = vector[];
         billboard.oldest_index = 0;
     }
 
