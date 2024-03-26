@@ -49,11 +49,14 @@ module billboard_address::billboard {
 
     #[view]
     public fun get_messages(): vector<Message> acquires Billboard {
-        let billboard= borrow_global_mut<Billboard>(@billboard_address);
+        let billboard= borrow_global<Billboard>(@billboard_address);
 
-        vector::rotate(&mut billboard.messages, billboard.oldest_index);
+        let messages = vector[];
+        vector::for_each(billboard.messages, |m| vector::push_back(&mut messages, m));
 
-        billboard.messages
+        vector::rotate(&mut messages, billboard.oldest_index);
+
+        messages
     }
 
     inline fun only_owner(owner: &signer) {
@@ -86,10 +89,17 @@ module billboard_address::billboard {
         assert!(vector::borrow(&msgs, 1).message == bob_message, 1);
         assert!(vector::borrow(&msgs, 1).sender == signer::address_of(bob), 1);
 
-        add_message(bob, bob_message);
-        add_message(bob, bob_message);
-        add_message(bob, bob_message);
-        add_message(bob, bob_message);
+        add_message(alice, alice_message);
+        add_message(alice, alice_message);
+        add_message(alice, alice_message);
+        add_message(alice, alice_message);
+
+        msgs = get_messages();
+
+        assert!(vector::length(&msgs) == 5, 1);
+
+        assert!(vector::borrow(&msgs, 0).message == bob_message, 1);
+        assert!(vector::borrow(&msgs, 0).sender == signer::address_of(bob), 1);
 
         msgs = get_messages();
 
