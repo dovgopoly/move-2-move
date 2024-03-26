@@ -2,6 +2,8 @@ module billboard_address::billboard {
     use std::signer;
     use std::string::{String};
     use std::vector;
+    use aptos_framework::event;
+    use aptos_framework::timestamp;
 
     const ENOT_OWNER: u64 = 1;
 
@@ -14,7 +16,15 @@ module billboard_address::billboard {
 
     struct Message has store, copy, drop {
         sender: address,
-        message: String
+        message: String,
+        added_at: u64
+    }
+
+    #[event]
+    struct AddedMessage has drop, store {
+        sender: address,
+        message: String,
+        added_at: u64
     }
 
     fun init_module(owner: &signer) {
@@ -25,7 +35,14 @@ module billboard_address::billboard {
         let message = Message {
             sender: signer::address_of(sender),
             message,
+            added_at: timestamp::now_seconds()
         };
+
+        event::emit(AddedMessage {
+            sender: message.sender,
+            message: message.message,
+            added_at: message.added_at
+        });
 
         let billboard = borrow_global_mut<Billboard>(@billboard_address);
 
@@ -49,7 +66,7 @@ module billboard_address::billboard {
 
     #[view]
     public fun get_messages(): vector<Message> acquires Billboard {
-        let billboard= borrow_global<Billboard>(@billboard_address);
+        let billboard = borrow_global<Billboard>(@billboard_address);
 
         let messages = vector[];
         vector::for_each(billboard.messages, |m| vector::push_back(&mut messages, m));
@@ -63,9 +80,17 @@ module billboard_address::billboard {
         assert!(signer::address_of(owner) == @billboard_address, ENOT_OWNER);
     }
 
-    #[test(owner = @billboard_address, alice = @0x1234, bob = @0xb0b)]
-    fun test_billboard_happy_path(owner: &signer, alice: &signer, bob: &signer) acquires Billboard {
+    #[test(aptos_framework = @std, owner = @billboard_address, alice = @0x1234, bob = @0xb0b)]
+    fun test_billboard_happy_path(
+        aptos_framework: &signer,
+        owner: &signer,
+        alice: &signer,
+        bob: &signer
+    ) acquires Billboard {
         use std::string;
+
+        timestamp::set_time_has_started_for_testing(aptos_framework);
+        timestamp::update_global_time_for_test_secs(1000);
 
         init_module(owner);
 

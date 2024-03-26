@@ -19,6 +19,8 @@ contract Billboard is Ownable {
 
     BillboardStorage private _billboard;
 
+    event MessageAdded(address sender, string message, uint256 addedAt);
+
     constructor(address owner_) {
         transferOwnership(owner_);
     }
@@ -29,6 +31,8 @@ contract Billboard is Ownable {
             message: messageText_,
             addedAt: block.timestamp
         });
+
+        emit MessageAdded(message_.sender, message_.message, message_.addedAt);
 
         if (_billboard.messages.length < MAX_MESSAGES) {
             _billboard.messages.push(message_);
