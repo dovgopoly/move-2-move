@@ -1,4 +1,5 @@
 module billboard_address::billboard {
+    use std::error;
     use std::signer;
     use std::string::{String};
     use std::vector;
@@ -65,7 +66,7 @@ module billboard_address::billboard {
     }
 
     inline fun only_owner(owner: &signer) {
-        assert!(signer::address_of(owner) == @billboard_address, ENOT_OWNER);
+        assert!(signer::address_of(owner) == @billboard_address, error::permission_denied(ENOT_OWNER));
     }
 
     #[view]

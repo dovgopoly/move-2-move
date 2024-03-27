@@ -27,7 +27,7 @@ module dutch_auction_address::dutch_auction {
     const DUTCH_AUCTION_SEED_PREFIX: vector<u8> = b"AUCTION_SEED_PREFIX";
 
     #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
-    struct Auction has key {
+    struct Auction has key, drop {
         sell_token: Object<Token>,
         buy_token: Object<Metadata>,
         max_price: u64,
@@ -62,12 +62,6 @@ module dutch_auction_address::dutch_auction {
 
     entry public fun bid(customer: &signer, auction: Object<Auction>) acquires Auction, TokenConfig {
         let auction_address = object::object_address(&auction);
-
-        assert!(
-            exists<Auction>(auction_address) && exists<TokenConfig>(auction_address),
-            error::invalid_argument(EINVALID_AUCTION_OBJECT)
-        );
-
         let auction = borrow_global_mut<Auction>(auction_address);
 
         assert!(
@@ -172,6 +166,21 @@ module dutch_auction_address::dutch_auction {
         let token_object = object::create_object_address(&@dutch_auction_address, token_seed);
 
         object::address_to_object<Token>(token_object)
+    }
+
+    #[view]
+    public fun get_auction(auction_object: Object<Auction>): Auction acquires Auction {
+        let auction_address = object::object_address(&auction_object);
+        let auction = borrow_global<Auction>(auction_address);
+
+        Auction {
+            sell_token: auction.sell_token,
+            buy_token: auction.buy_token,
+            max_price: auction.max_price,
+            min_price: auction.min_price,
+            duration: auction.duration,
+            started_at: auction.started_at
+        }
     }
 
     fun must_have_price(auction: &Auction): u64 {
