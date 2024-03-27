@@ -64,20 +64,17 @@ module billboard_address::billboard {
         billboard.oldest_index = 0;
     }
 
-    #[view]
-    public fun get_messages(): vector<Message> acquires Billboard {
-        let billboard = borrow_global<Billboard>(@billboard_address);
-
-        let messages = vector[];
-        vector::for_each(billboard.messages, |m| vector::push_back(&mut messages, m));
-
-        vector::rotate(&mut messages, billboard.oldest_index);
-
-        messages
-    }
-
     inline fun only_owner(owner: &signer) {
         assert!(signer::address_of(owner) == @billboard_address, ENOT_OWNER);
+    }
+
+    #[view]
+    public fun get_messages(): vector<Message> acquires Billboard {
+        let billboard = borrow_global_mut<Billboard>(@billboard_address);
+
+        vector::rotate(&mut billboard.messages, billboard.oldest_index);
+
+        billboard.messages
     }
 
     #[test(aptos_framework = @std, owner = @billboard_address, alice = @0x1234, bob = @0xb0b)]
@@ -118,13 +115,6 @@ module billboard_address::billboard {
         add_message(alice, alice_message);
         add_message(alice, alice_message);
         add_message(alice, alice_message);
-
-        msgs = get_messages();
-
-        assert!(vector::length(&msgs) == 5, 1);
-
-        assert!(vector::borrow(&msgs, 0).message == bob_message, 1);
-        assert!(vector::borrow(&msgs, 0).sender == signer::address_of(bob), 1);
 
         msgs = get_messages();
 

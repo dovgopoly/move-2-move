@@ -1,7 +1,6 @@
 [package]
 name = "dutch_auction"
 version = "1.0.0"
-authors = []
 
 [addresses]
 dutch_auction_address = "0x1337"
