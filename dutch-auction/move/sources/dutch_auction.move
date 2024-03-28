@@ -129,7 +129,7 @@ module dutch_auction_address::dutch_auction {
     }
 
     entry public fun bid(customer: &signer, auction: Object<Auction>) acquires Auction, TokenConfig {
-        let auction_address= object::object_address(&auction);
+        let auction_address = object::object_address(&auction);
         let auction = borrow_global_mut<Auction>(auction_address);
 
         assert!(exists<TokenConfig>(auction_address), error::unavailable(ETOKEN_SOLD));
