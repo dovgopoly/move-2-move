@@ -14,7 +14,7 @@ module dutch_auction_address::dutch_auction {
     use aptos_token_objects::token::{Self, Token};
 
     const ENOT_OWNER: u64 = 1;
-    const ENOT_ON_SALE: u64 = 2;
+    const ETOKEN_SOLD: u64 = 2;
     const EINVALID_AUCTION_OBJECT: u64 = 3;
     const EOUTDATED_AUCTION: u64 = 4;
     const EINVALID_PRICES: u64 = 5;
@@ -27,7 +27,7 @@ module dutch_auction_address::dutch_auction {
     const DUTCH_AUCTION_SEED_PREFIX: vector<u8> = b"AUCTION_SEED_PREFIX";
 
     #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
-    struct Auction has key, drop {
+    struct Auction has key {
         sell_token: Object<Token>,
         buy_token: Object<Metadata>,
         max_price: u64,
@@ -37,7 +37,7 @@ module dutch_auction_address::dutch_auction {
     }
 
     #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
-    struct TokenConfig has key {
+    struct TokenConfig has key, drop {
         transfer_ref: TransferRef
     }
 
@@ -58,25 +58,6 @@ module dutch_auction_address::dutch_auction {
             option::none(),
             uri,
         );
-    }
-
-    entry public fun bid(customer: &signer, auction: Object<Auction>) acquires Auction, TokenConfig {
-        let auction_address = object::object_address(&auction);
-        let auction = borrow_global_mut<Auction>(auction_address);
-
-        assert!(
-            object::is_owner(auction.sell_token, @dutch_auction_address),
-            error::unavailable(ENOT_ON_SALE)
-        );
-
-        let current_price = must_have_price(auction);
-
-        primary_fungible_store::transfer(customer, auction.buy_token, @dutch_auction_address, current_price);
-
-        let transfer_ref = &borrow_global_mut<TokenConfig>(auction_address).transfer_ref;
-        let linear_transfer_ref = object::generate_linear_transfer_ref(transfer_ref);
-
-        object::transfer_with_ref(linear_transfer_ref, signer::address_of(customer));
     }
 
     entry public fun start_auction(
@@ -127,14 +108,12 @@ module dutch_auction_address::dutch_auction {
         event::emit(AuctionCreated { auction });
     }
 
-    #[view]
     fun get_token_seed(token_name: String): vector<u8> {
         let collection_name = string::utf8(DUTCH_AUCTION_COLLECTION_NAME);
 
         token::create_token_seed(&collection_name, &token_name)
     }
 
-    #[view]
     fun get_auction_seed(token_name: String): vector<u8> {
         let token_seed = get_token_seed(token_name);
 
@@ -145,8 +124,41 @@ module dutch_auction_address::dutch_auction {
         seed
     }
 
+    inline fun only_owner(owner: &signer) {
+        assert!(signer::address_of(owner) == @dutch_auction_address, error::permission_denied(ENOT_OWNER));
+    }
+
+    entry public fun bid(customer: &signer, auction: Object<Auction>) acquires Auction, TokenConfig {
+        let auction_address= object::object_address(&auction);
+        let auction = borrow_global_mut<Auction>(auction_address);
+
+        assert!(exists<TokenConfig>(auction_address), error::unavailable(ETOKEN_SOLD));
+
+        let current_price = must_have_price(auction);
+
+        primary_fungible_store::transfer(customer, auction.buy_token, @dutch_auction_address, current_price);
+
+        let transfer_ref = &borrow_global_mut<TokenConfig>(auction_address).transfer_ref;
+        let linear_transfer_ref = object::generate_linear_transfer_ref(transfer_ref);
+
+        object::transfer_with_ref(linear_transfer_ref, signer::address_of(customer));
+
+        move_from<TokenConfig>(auction_address);
+    }
+
+    fun must_have_price(auction: &Auction): u64 {
+        let time_now = timestamp::now_seconds();
+
+        assert!(time_now <= auction.started_at + auction.duration, error::unavailable(EOUTDATED_AUCTION));
+
+        let time_passed = time_now - auction.started_at;
+        let discount = ((auction.max_price - auction.min_price) * time_passed) / auction.duration;
+
+        auction.max_price - discount
+    }
+
     #[view]
-    fun get_auction_object(token_name: String): Object<Auction> {
+    public fun get_auction_object(token_name: String): Object<Auction> {
         let auction_seed = get_auction_seed(token_name);
         let auction_address = object::create_object_address(&@dutch_auction_address, auction_seed);
 
@@ -154,14 +166,14 @@ module dutch_auction_address::dutch_auction {
     }
 
     #[view]
-    fun get_collection_object(): Object<Collection> {
+    public fun get_collection_object(): Object<Collection> {
         let collection_address = object::create_object_address(&@dutch_auction_address, DUTCH_AUCTION_SEED_PREFIX);
 
         object::address_to_object(collection_address)
     }
 
     #[view]
-    fun get_token_object(token_name: String): Object<Token> {
+    public fun get_token_object(token_name: String): Object<Token> {
         let token_seed = get_token_seed(token_name);
         let token_object = object::create_object_address(&@dutch_auction_address, token_seed);
 
@@ -181,21 +193,6 @@ module dutch_auction_address::dutch_auction {
             duration: auction.duration,
             started_at: auction.started_at
         }
-    }
-
-    fun must_have_price(auction: &Auction): u64 {
-        let time_now = timestamp::now_seconds();
-
-        assert!(time_now <= auction.started_at + auction.duration, error::unavailable(EOUTDATED_AUCTION));
-
-        let time_passed = time_now - auction.started_at;
-        let discount = ((auction.max_price - auction.min_price) * time_passed) / auction.duration;
-
-        auction.max_price - discount
-    }
-
-    inline fun only_owner(owner: &signer) {
-        assert!(signer::address_of(owner) == @dutch_auction_address, error::permission_denied(ENOT_OWNER));
     }
 
     #[test(aptos_framework = @std, owner = @dutch_auction_address, customer = @0x1234)]
