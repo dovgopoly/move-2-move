@@ -97,7 +97,8 @@ module dutch_auction_address::dutch_auction {
             started_at: timestamp::now_seconds()
         };
 
-        let auction_ctor = object::create_named_object(owner, get_auction_seed(token_name));
+        let auction_seed = get_auction_seed(token_name);
+        let auction_ctor = object::create_named_object(owner, auction_seed);
         let auction_signer = object::generate_signer(&auction_ctor);
 
         move_to(&auction_signer, auction);
@@ -108,9 +109,14 @@ module dutch_auction_address::dutch_auction {
         event::emit(AuctionCreated { auction });
     }
 
+    fun get_collection_seed(): vector<u8> {
+        DUTCH_AUCTION_COLLECTION_NAME
+    }
+
     fun get_token_seed(token_name: String): vector<u8> {
         let collection_name = string::utf8(DUTCH_AUCTION_COLLECTION_NAME);
 
+        /// concatinates collection_name::token_name
         token::create_token_seed(&collection_name, &token_name)
     }
 
@@ -167,7 +173,8 @@ module dutch_auction_address::dutch_auction {
 
     #[view]
     public fun get_collection_object(): Object<Collection> {
-        let collection_address = object::create_object_address(&@dutch_auction_address, DUTCH_AUCTION_SEED_PREFIX);
+        let collection_seed = get_collection_seed();
+        let collection_address = object::create_object_address(&@dutch_auction_address, collection_seed);
 
         object::address_to_object(collection_address)
     }
