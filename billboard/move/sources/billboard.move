@@ -15,6 +15,10 @@ module billboard_address::billboard {
         oldest_index: u64
     }
 
+    struct Storage<phantom SomeType> has key {
+        increment: u64,
+    }
+
     struct Message has store, copy, drop {
         sender: address,
         message: String,
@@ -65,6 +69,16 @@ module billboard_address::billboard {
         billboard.oldest_index = 0;
     }
 
+    public entry fun what_is_template<SomeType>(owner: &signer) acquires Storage {
+        if (!exists<Storage<SomeType>>(signer::address_of(owner))) {
+            move_to(owner, Storage<SomeType> { increment: 0 });
+        };
+
+        let storage = borrow_global_mut<Storage<SomeType>>(signer::address_of(owner));
+
+        storage.increment = storage.increment + 1;
+    }
+
     inline fun only_owner(owner: &signer) {
         assert!(signer::address_of(owner) == @billboard_address, error::permission_denied(ENOT_OWNER));
     }
@@ -79,6 +93,29 @@ module billboard_address::billboard {
         vector::rotate(&mut messages, billboard.oldest_index);
 
         messages
+    }
+
+    struct TestType {}
+
+    #[test(aptos_framework = @std, owner = @billboard_address, alice = @0x1234)]
+    fun test_what_is_template(
+        aptos_framework: &signer,
+        owner: &signer,
+        alice: &signer
+    ) acquires Storage {
+        timestamp::set_time_has_started_for_testing(aptos_framework);
+        timestamp::update_global_time_for_test_secs(1000);
+
+        init_module(owner);
+
+        what_is_template<TestType>(alice);
+
+        assert!(exists<Storage<TestType>>(signer::address_of(alice)), 1);
+        assert!(borrow_global<Storage<TestType>>(signer::address_of(alice)).increment == 1, 1);
+
+        what_is_template<TestType>(alice);
+
+        assert!(borrow_global<Storage<TestType>>(signer::address_of(alice)).increment == 2, 1);
     }
 
     #[test(aptos_framework = @std, owner = @billboard_address, alice = @0x1234, bob = @0xb0b)]
